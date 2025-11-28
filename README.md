@@ -1,8 +1,10 @@
 ![hey](http://i.imgur.com/szzD9q0.png)
 
-[![Build Status](https://travis-ci.org/rakyll/hey.svg?branch=master)](https://travis-ci.org/rakyll/hey)
-
 hey is a tiny program that sends some load to a web application.
+
+[This fork](https://github.com/znull/hey) of [rakyll/hey](https://github.com/rakyll/hey)
+adds TLS parameters to allow benchmarking against a server using a custom CA,
+optionally with a client certificate and key (so-called "mutual TLS" or mTLS).
 
 hey was originally called boom and was influenced from Tarek Ziade's
 tool at [tarekziade/boom](https://github.com/tarekziade/boom). Using the same name was a mistake as it resulted in cases
@@ -62,6 +64,10 @@ Options:
   -disable-redirects    Disable following of HTTP redirects
   -cpus                 Number of used cpu cores.
                         (default for current machine is 8 cores)
+
+  -cacert  Path to CA certificate file for server certificate verification.
+  -cert    Path to client TLS certificate file.
+  -key     Path to client TLS private key file.
 ```
 
 Previously known as [github.com/rakyll/boom](https://github.com/rakyll/boom).
