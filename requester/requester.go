@@ -268,7 +268,9 @@ func (b *Work) runWorkers() {
 			panic(fmt.Sprintf("failed to read CA certificate file %s: %v", b.CACert, err))
 		}
 		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			panic(fmt.Sprintf("failed to add CA certificate %s to pool", b.CACert))
+		}
 		tlsConfig.RootCAs = caCertPool
 		tlsConfig.InsecureSkipVerify = false
 	}
