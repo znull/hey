@@ -351,3 +351,36 @@ func keyToPEM(key interface{}) []byte {
 	rsaKey := key.(*rsa.PrivateKey)
 	return pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(rsaKey)})
 }
+
+func TestResolve(t *testing.T) {
+	var count int64
+	var receivedHost string
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&count, int64(1))
+		receivedHost = r.Host
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	defer server.Close()
+
+	// Extract port from the test server URL
+	_, port, _ := net.SplitHostPort(server.Listener.Addr().String())
+
+	// Create a request with a fake hostname
+	fakeHost := "fake.example.com:" + port
+	req, _ := http.NewRequest("GET", "http://"+fakeHost+"/", nil)
+
+	w := &Work{
+		Request: req,
+		N:       5,
+		C:       1,
+		Resolve: "fake.example.com:" + port + ":127.0.0.1",
+	}
+	w.Run()
+
+	if count != 5 {
+		t.Errorf("Expected to send 5 requests, found %v", count)
+	}
+	if receivedHost != fakeHost {
+		t.Errorf("Expected Host header to be %s, got %s", fakeHost, receivedHost)
+	}
+}
