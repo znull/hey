@@ -16,6 +16,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -64,6 +65,9 @@ var (
 	disableKeepAlives  = flag.Bool("disable-keepalive", false, "")
 	disableRedirects   = flag.Bool("disable-redirects", false, "")
 	proxyAddr          = flag.String("x", "", "")
+	caCert             = flag.String("cacert", "", "")
+	clientCert         = flag.String("cert", "", "")
+	clientKey          = flag.String("key", "", "")
 )
 
 var usage = `Usage: hey [options...] <url>
@@ -101,6 +105,10 @@ Options:
   -disable-redirects    Disable following of HTTP redirects
   -cpus                 Number of used cpu cores.
                         (default for current machine is %d cores)
+
+  -cacert  Path to CA certificate file for server certificate verification.
+  -cert    Path to client TLS certificate file.
+  -key     Path to client TLS private key file.
 `
 
 func main() {
@@ -221,6 +229,21 @@ func main() {
 
 	req.Header = header
 
+	// Validate TLS certificate files if provided
+	if *caCert != "" {
+		if _, err := ioutil.ReadFile(*caCert); err != nil {
+			errAndExit(fmt.Sprintf("Unable to read CA certificate file: %v", err))
+		}
+	}
+	if *clientCert != "" || *clientKey != "" {
+		if *clientCert == "" || *clientKey == "" {
+			usageAndExit("Both -cert and -key must be provided for client TLS authentication.")
+		}
+		if _, err := tls.LoadX509KeyPair(*clientCert, *clientKey); err != nil {
+			errAndExit(fmt.Sprintf("Unable to load client certificate/key pair: %v", err))
+		}
+	}
+
 	w := &requester.Work{
 		Request:            req,
 		RequestBody:        bodyAll,
@@ -234,6 +257,9 @@ func main() {
 		H2:                 *h2,
 		ProxyAddr:          proxyURL,
 		Output:             *output,
+		CACert:             *caCert,
+		Cert:               *clientCert,
+		Key:                *clientKey,
 	}
 	w.Init()
 
