@@ -49,6 +49,7 @@ Options:
   -d  HTTP request body.
   -D  HTTP request body from file. For example, /home/user/file.txt or ./file.txt.
   -T  Content-type, defaults to "text/html".
+  -U  User-Agent, defaults to version "hey/0.0.1".
   -a  Basic authentication, username:password.
   -x  HTTP Proxy address as host:port.
   -h2 Enable HTTP/2.
