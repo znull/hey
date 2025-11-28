@@ -64,6 +64,9 @@ var (
 	disableKeepAlives  = flag.Bool("disable-keepalive", false, "")
 	disableRedirects   = flag.Bool("disable-redirects", false, "")
 	proxyAddr          = flag.String("x", "", "")
+	caCert             = flag.String("cacert", "", "")
+	clientCert         = flag.String("cert", "", "")
+	clientKey          = flag.String("key", "", "")
 )
 
 var usage = `Usage: hey [options...] <url>
@@ -101,6 +104,10 @@ Options:
   -disable-redirects    Disable following of HTTP redirects
   -cpus                 Number of used cpu cores.
                         (default for current machine is %d cores)
+
+  -cacert  Path to CA certificate file for server certificate verification.
+  -cert    Path to client TLS certificate file.
+  -key     Path to client TLS private key file.
 `
 
 func main() {
@@ -234,6 +241,9 @@ func main() {
 		H2:                 *h2,
 		ProxyAddr:          proxyURL,
 		Output:             *output,
+		CACert:             *caCert,
+		Cert:               *clientCert,
+		Key:                *clientKey,
 	}
 	w.Init()
 

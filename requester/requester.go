@@ -18,8 +18,10 @@ package requester
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -88,6 +90,18 @@ type Work struct {
 	// ProxyAddr is the address of HTTP proxy server in the format on "host:port".
 	// Optional.
 	ProxyAddr *url.URL
+
+	// CACert is the path to the CA certificate file for server verification.
+	// Optional.
+	CACert string
+
+	// Cert is the path to the client TLS certificate file.
+	// Optional.
+	Cert string
+
+	// Key is the path to the client TLS private key file.
+	// Optional.
+	Key string
 
 	// Writer is where results will be written. If nil, results are written to stdout.
 	Writer io.Writer
@@ -235,11 +249,40 @@ func (b *Work) runWorkers() {
 	var wg sync.WaitGroup
 	wg.Add(b.C)
 
+	// Extract hostname without port for TLS ServerName
+	serverName := b.Request.Host
+	if host, _, err := net.SplitHostPort(b.Request.Host); err == nil {
+		serverName = host
+	}
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true,
+		ServerName:         serverName,
+	}
+
+	// If CA cert is provided, use it for server verification
+	if b.CACert != "" {
+		caCert, err := ioutil.ReadFile(b.CACert)
+		if err != nil {
+			panic(err)
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+		tlsConfig.RootCAs = caCertPool
+		tlsConfig.InsecureSkipVerify = false
+	}
+
+	// If client cert and key are provided, use them for client authentication
+	if b.Cert != "" && b.Key != "" {
+		cert, err := tls.LoadX509KeyPair(b.Cert, b.Key)
+		if err != nil {
+			panic(err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-			ServerName:         b.Request.Host,
-		},
+		TLSClientConfig:     tlsConfig,
 		MaxIdleConnsPerHost: min(b.C, maxIdleConn),
 		DisableCompression:  b.DisableCompression,
 		DisableKeepAlives:   b.DisableKeepAlives,

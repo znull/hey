@@ -16,9 +16,19 @@ package requester
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"io/ioutil"
+	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -131,4 +141,213 @@ func TestBody(t *testing.T) {
 	if count != 10 {
 		t.Errorf("Expected to work 10 times, found %v", count)
 	}
+}
+
+func TestTLSWithCACert(t *testing.T) {
+	// Create temp directory for certs
+	tempDir, err := ioutil.TempDir("", "hey-test-certs")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Generate CA certificate
+	caCert, caKey, err := generateTestCA()
+	if err != nil {
+		t.Fatalf("Failed to generate CA: %v", err)
+	}
+
+	// Generate server certificate
+	serverCert, serverKey, err := generateTestCert(caCert, caKey, "localhost")
+	if err != nil {
+		t.Fatalf("Failed to generate server cert: %v", err)
+	}
+
+	// Write CA cert to file
+	caCertPath := filepath.Join(tempDir, "ca.crt")
+	caCertPEM := certToPEM(caCert)
+	if err := ioutil.WriteFile(caCertPath, caCertPEM, 0644); err != nil {
+		t.Fatalf("Failed to write CA cert: %v", err)
+	}
+
+	// Create TLS server
+	serverTLSCert, err := tls.X509KeyPair(certToPEM(serverCert), keyToPEM(serverKey))
+	if err != nil {
+		t.Fatalf("Failed to create server TLS cert: %v", err)
+	}
+
+	var count int64
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&count, int64(1))
+	}
+	server := httptest.NewUnstartedServer(http.HandlerFunc(handler))
+	server.TLS = &tls.Config{
+		Certificates: []tls.Certificate{serverTLSCert},
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	req, _ := http.NewRequest("GET", server.URL, nil)
+	w := &Work{
+		Request: req,
+		N:       5,
+		C:       1,
+		CACert:  caCertPath,
+	}
+	w.Run()
+	if count != 5 {
+		t.Errorf("Expected to send 5 requests, found %v", count)
+	}
+}
+
+func TestTLSWithClientCert(t *testing.T) {
+	// Create temp directory for certs
+	tempDir, err := ioutil.TempDir("", "hey-test-certs")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Generate CA certificate
+	caCert, caKey, err := generateTestCA()
+	if err != nil {
+		t.Fatalf("Failed to generate CA: %v", err)
+	}
+
+	// Generate server certificate
+	serverCert, serverKey, err := generateTestCert(caCert, caKey, "localhost")
+	if err != nil {
+		t.Fatalf("Failed to generate server cert: %v", err)
+	}
+
+	// Generate client certificate
+	clientCert, clientKey, err := generateTestCert(caCert, caKey, "client")
+	if err != nil {
+		t.Fatalf("Failed to generate client cert: %v", err)
+	}
+
+	// Write certs to files
+	caCertPath := filepath.Join(tempDir, "ca.crt")
+	caCertPEM := certToPEM(caCert)
+	if err := ioutil.WriteFile(caCertPath, caCertPEM, 0644); err != nil {
+		t.Fatalf("Failed to write CA cert: %v", err)
+	}
+
+	clientCertPath := filepath.Join(tempDir, "client.crt")
+	if err := ioutil.WriteFile(clientCertPath, certToPEM(clientCert), 0644); err != nil {
+		t.Fatalf("Failed to write client cert: %v", err)
+	}
+
+	clientKeyPath := filepath.Join(tempDir, "client.key")
+	if err := ioutil.WriteFile(clientKeyPath, keyToPEM(clientKey), 0600); err != nil {
+		t.Fatalf("Failed to write client key: %v", err)
+	}
+
+	// Create TLS server with client authentication
+	serverTLSCert, err := tls.X509KeyPair(certToPEM(serverCert), keyToPEM(serverKey))
+	if err != nil {
+		t.Fatalf("Failed to create server TLS cert: %v", err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	caCertPool.AddCert(caCert)
+
+	var count int64
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&count, int64(1))
+	}
+	server := httptest.NewUnstartedServer(http.HandlerFunc(handler))
+	server.TLS = &tls.Config{
+		Certificates: []tls.Certificate{serverTLSCert},
+		ClientCAs:    caCertPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	req, _ := http.NewRequest("GET", server.URL, nil)
+	w := &Work{
+		Request: req,
+		N:       5,
+		C:       1,
+		CACert:  caCertPath,
+		Cert:    clientCertPath,
+		Key:     clientKeyPath,
+	}
+	w.Run()
+	if count != 5 {
+		t.Errorf("Expected to send 5 requests, found %v", count)
+	}
+}
+
+// Helper functions for generating test certificates
+
+func generateTestCA() (*x509.Certificate, interface{}, error) {
+	return generateTestCertInternal(nil, nil, "TestCA", true)
+}
+
+func generateTestCert(caCert *x509.Certificate, caKey interface{}, commonName string) (*x509.Certificate, interface{}, error) {
+	return generateTestCertInternal(caCert, caKey, commonName, false)
+}
+
+func generateTestCertInternal(caCert *x509.Certificate, caKey interface{}, commonName string, isCA bool) (*x509.Certificate, interface{}, error) {
+	// Generate key
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create certificate template
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour),
+		BasicConstraintsValid: true,
+		IsCA:                  isCA,
+	}
+
+	if isCA {
+		template.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
+	} else {
+		template.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
+		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+		template.DNSNames = []string{"localhost"}
+		template.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
+	}
+
+	parent := template
+	parentKey := key
+	if caCert != nil && caKey != nil {
+		parent = caCert
+		parentKey = caKey.(*rsa.PrivateKey)
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, parent, &key.PublicKey, parentKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return cert, key, nil
+}
+
+func certToPEM(cert *x509.Certificate) []byte {
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+}
+
+func keyToPEM(key interface{}) []byte {
+	rsaKey := key.(*rsa.PrivateKey)
+	return pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(rsaKey)})
 }
