@@ -17,6 +17,7 @@ package requester
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,6 +105,11 @@ type Work struct {
 	// Key is the path to the client TLS private key file.
 	// Optional.
 	Key string
+
+	// Resolve provides a custom address for a specific host and port pair.
+	// Format: "host:port:address" (similar to curl's --resolve flag).
+	// Optional.
+	Resolve string
 
 	// Writer is where results will be written. If nil, results are written to stdout.
 	Writer io.Writer
@@ -246,6 +253,37 @@ func (b *Work) runWorker(client *http.Client, n int) {
 	}
 }
 
+// createDialContext creates a custom DialContext function that overrides DNS resolution
+// based on the Resolve setting. The Resolve format is "host:port:address".
+func (b *Work) createDialContext() func(ctx context.Context, network, addr string) (net.Conn, error) {
+	// Parse the resolve string: host:port:address
+	parts := strings.SplitN(b.Resolve, ":", 3)
+	if len(parts) != 3 {
+		panic(fmt.Sprintf("invalid resolve format: %q, expected host:port:address", b.Resolve))
+	}
+	resolveHost := parts[0]
+	resolvePort := parts[1]
+	resolveAddr := parts[2]
+
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return dialer.DialContext(ctx, network, addr)
+		}
+
+		// If the host and port match the resolve setting, use the custom address
+		if host == resolveHost && port == resolvePort {
+			addr = net.JoinHostPort(resolveAddr, port)
+		}
+		return dialer.DialContext(ctx, network, addr)
+	}
+}
+
 func (b *Work) runWorkers() {
 	var wg sync.WaitGroup
 	wg.Add(b.C)
@@ -291,6 +329,12 @@ func (b *Work) runWorkers() {
 		DisableKeepAlives:   b.DisableKeepAlives,
 		Proxy:               http.ProxyURL(b.ProxyAddr),
 	}
+
+	// If resolve is provided, use custom dialer to override DNS resolution
+	if b.Resolve != "" {
+		tr.DialContext = b.createDialContext()
+	}
+
 	if b.H2 {
 		http2.ConfigureTransport(tr)
 	} else {

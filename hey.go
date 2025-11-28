@@ -68,6 +68,7 @@ var (
 	caCert             = flag.String("cacert", "", "")
 	clientCert         = flag.String("cert", "", "")
 	clientKey          = flag.String("key", "", "")
+	resolve            = flag.String("resolve", "", "")
 )
 
 var usage = `Usage: hey [options...] <url>
@@ -106,9 +107,12 @@ Options:
   -cpus                 Number of used cpu cores.
                         (default for current machine is %d cores)
 
-  -cacert  Path to CA certificate file for server certificate verification.
-  -cert    Path to client TLS certificate file.
-  -key     Path to client TLS private key file.
+  -cacert   Path to CA certificate file for server certificate verification.
+  -cert     Path to client TLS certificate file.
+  -key      Path to client TLS private key file.
+  -resolve  Provide a custom address for a specific host and port pair.
+            Format: host:port:address. For example,
+            -resolve example.com:443:127.0.0.1
 `
 
 func main() {
@@ -260,6 +264,7 @@ func main() {
 		CACert:             *caCert,
 		Cert:               *clientCert,
 		Key:                *clientKey,
+		Resolve:            *resolve,
 	}
 	w.Init()
 
