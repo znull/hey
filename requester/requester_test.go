@@ -363,11 +363,17 @@ func TestResolve(t *testing.T) {
 	defer server.Close()
 
 	// Extract port from the test server URL
-	_, port, _ := net.SplitHostPort(server.Listener.Addr().String())
+	_, port, err := net.SplitHostPort(server.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to extract port from server address: %v", err)
+	}
 
 	// Create a request with a fake hostname
 	fakeHost := "fake.example.com:" + port
-	req, _ := http.NewRequest("GET", "http://"+fakeHost+"/", nil)
+	req, err := http.NewRequest("GET", "http://"+fakeHost+"/", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
 
 	w := &Work{
 		Request: req,

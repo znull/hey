@@ -259,7 +259,7 @@ func (b *Work) createDialContext() func(ctx context.Context, network, addr strin
 	// Parse the resolve string: host:port:address
 	parts := strings.SplitN(b.Resolve, ":", 3)
 	if len(parts) != 3 {
-		return nil
+		panic(fmt.Sprintf("invalid resolve format: %q, expected host:port:address", b.Resolve))
 	}
 	resolveHost := parts[0]
 	resolvePort := parts[1]
