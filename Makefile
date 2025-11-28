@@ -3,6 +3,9 @@ binary = hey
 hey: $(shell find -name '*.go')
 	go build
 
+test:
+	go test ./...
+
 release:
 	GOOS=windows GOARCH=amd64 go build -o ./bin/$(binary)_windows_amd64
 	GOOS=linux GOARCH=amd64 go build -o ./bin/$(binary)_linux_amd64
