@@ -16,6 +16,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -227,6 +228,21 @@ func main() {
 	}
 
 	req.Header = header
+
+	// Validate TLS certificate files if provided
+	if *caCert != "" {
+		if _, err := ioutil.ReadFile(*caCert); err != nil {
+			errAndExit(fmt.Sprintf("Unable to read CA certificate file: %v", err))
+		}
+	}
+	if *clientCert != "" || *clientKey != "" {
+		if *clientCert == "" || *clientKey == "" {
+			usageAndExit("Both -cert and -key must be provided for client TLS authentication.")
+		}
+		if _, err := tls.LoadX509KeyPair(*clientCert, *clientKey); err != nil {
+			errAndExit(fmt.Sprintf("Unable to load client certificate/key pair: %v", err))
+		}
+	}
 
 	w := &requester.Work{
 		Request:            req,

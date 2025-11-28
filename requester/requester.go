@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -264,7 +265,7 @@ func (b *Work) runWorkers() {
 	if b.CACert != "" {
 		caCert, err := ioutil.ReadFile(b.CACert)
 		if err != nil {
-			panic(err)
+			panic(fmt.Sprintf("failed to read CA certificate file %s: %v", b.CACert, err))
 		}
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
@@ -276,7 +277,7 @@ func (b *Work) runWorkers() {
 	if b.Cert != "" && b.Key != "" {
 		cert, err := tls.LoadX509KeyPair(b.Cert, b.Key)
 		if err != nil {
-			panic(err)
+			panic(fmt.Sprintf("failed to load client certificate/key pair (cert: %s, key: %s): %v", b.Cert, b.Key, err))
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
 	}
