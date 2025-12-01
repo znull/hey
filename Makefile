@@ -1,5 +1,7 @@
 binary = hey
 
+export GOWORK := off
+
 hey: $(shell find -name '*.go')
 	go build
 
