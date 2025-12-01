@@ -61,14 +61,15 @@ var (
 	h2   = flag.Bool("h2", false, "")
 	cpus = flag.Int("cpus", runtime.GOMAXPROCS(-1), "")
 
-	disableCompression = flag.Bool("disable-compression", false, "")
-	disableKeepAlives  = flag.Bool("disable-keepalive", false, "")
-	disableRedirects   = flag.Bool("disable-redirects", false, "")
-	proxyAddr          = flag.String("x", "", "")
-	caCert             = flag.String("cacert", "", "")
-	clientCert         = flag.String("cert", "", "")
-	clientKey          = flag.String("key", "", "")
-	resolve            = flag.String("resolve", "", "")
+	disableCompression        = flag.Bool("disable-compression", false, "")
+	disableKeepAlives         = flag.Bool("disable-keepalive", false, "")
+	disableRedirects          = flag.Bool("disable-redirects", false, "")
+	disableSessionResumption  = flag.Bool("disable-session-resumption", false, "")
+	proxyAddr                 = flag.String("x", "", "")
+	caCert                    = flag.String("cacert", "", "")
+	clientCert                = flag.String("cert", "", "")
+	clientKey                 = flag.String("key", "", "")
+	resolve                   = flag.String("resolve", "", "")
 )
 
 var usage = `Usage: hey [options...] <url>
@@ -104,6 +105,9 @@ Options:
   -disable-keepalive    Disable keep-alive, prevents re-use of TCP
                         connections between different HTTP requests.
   -disable-redirects    Disable following of HTTP redirects
+  -disable-session-resumption
+                        Disable TLS session resumption, prevents re-use of TLS
+                        session tickets between connections.
   -cpus                 Number of used cpu cores.
                         (default for current machine is %d cores)
 
@@ -249,22 +253,23 @@ func main() {
 	}
 
 	w := &requester.Work{
-		Request:            req,
-		RequestBody:        bodyAll,
-		N:                  num,
-		C:                  conc,
-		QPS:                q,
-		Timeout:            *t,
-		DisableCompression: *disableCompression,
-		DisableKeepAlives:  *disableKeepAlives,
-		DisableRedirects:   *disableRedirects,
-		H2:                 *h2,
-		ProxyAddr:          proxyURL,
-		Output:             *output,
-		CACert:             *caCert,
-		Cert:               *clientCert,
-		Key:                *clientKey,
-		Resolve:            *resolve,
+		Request:                   req,
+		RequestBody:               bodyAll,
+		N:                         num,
+		C:                         conc,
+		QPS:                       q,
+		Timeout:                   *t,
+		DisableCompression:        *disableCompression,
+		DisableKeepAlives:         *disableKeepAlives,
+		DisableRedirects:          *disableRedirects,
+		DisableSessionResumption:  *disableSessionResumption,
+		H2:                        *h2,
+		ProxyAddr:                 proxyURL,
+		Output:                    *output,
+		CACert:                    *caCert,
+		Cert:                      *clientCert,
+		Key:                       *clientKey,
+		Resolve:                   *resolve,
 	}
 	w.Init()
 

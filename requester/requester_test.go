@@ -390,3 +390,24 @@ func TestResolve(t *testing.T) {
 		t.Errorf("Expected Host header to be %s, got %s", fakeHost, receivedHost)
 	}
 }
+
+func TestDisableSessionResumption(t *testing.T) {
+	var count int64
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&count, int64(1))
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	defer server.Close()
+
+	req, _ := http.NewRequest("GET", server.URL, nil)
+	w := &Work{
+		Request:                  req,
+		N:                        5,
+		C:                        1,
+		DisableSessionResumption: true,
+	}
+	w.Run()
+	if count != 5 {
+		t.Errorf("Expected to send 5 requests with session resumption disabled, found %v", count)
+	}
+}
