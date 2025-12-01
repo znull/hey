@@ -86,6 +86,9 @@ type Work struct {
 	// DisableRedirects is an option to prevent the following of HTTP redirects
 	DisableRedirects bool
 
+	// DisableSessionResumption is an option to disable TLS session resumption using session tickets
+	DisableSessionResumption bool
+
 	// Output represents the output type. If "csv" is provided, the
 	// output will be dumped as a csv stream.
 	Output string
@@ -297,6 +300,11 @@ func (b *Work) runWorkers() {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 		ServerName:         serverName,
+	}
+
+	// Enable TLS session resumption by default unless disabled
+	if !b.DisableSessionResumption {
+		tlsConfig.ClientSessionCache = tls.NewLRUClientSessionCache(0)
 	}
 
 	// If CA cert is provided, use it for server verification
